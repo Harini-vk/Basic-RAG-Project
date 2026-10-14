@@ -1,0 +1,9 @@
+Retrieval-Augmented Generation (RAG) combines information retrieval with text generation.
+
+A RAG system retrieves relevant information from a knowledge base before generating an answer.
+
+Chunking splits large documents into smaller pieces. Overlapping chunks help preserve context between adjacent pieces.
+
+Embeddings represent text as numerical vectors. Similarity search uses these vectors to find relevant information.
+
+A retriever selects the most relevant chunks for a user's question. A language model uses the retrieved context to generate an answer.

@@ -1,0 +1,178 @@
+What are embeddings?
+An embedding model converts text into a list of numbers (a vector) that captures aspects of its meaning.
+
+Sentence A
+"How can I reset my password?"
+
+Sentence B
+"I forgot my login credentials. How do I regain access?"
+
+
+Embedding model: Converts each sentence into a numerical vector.
+
+Because the sentences express related ideas, a good embedding model should place their vectors relatively close together.
+
+
+
+
+
+# Notes: Vector Database and RAG
+
+## 1. What Does a Vector Database Store?
+
+A vector database stores numerical vectors (embeddings) along with associated text and metadata.
+
+### How data is stored
+
+Suppose `data/embeddings_notes.txt` contains:
+
+> Embeddings are numerical representations of text. An embedding model converts sentences or passages into vectors.
+
+The ingestion pipeline splits the document into smaller chunks. An embedding model converts each chunk into a numerical vector.
+
+A vector database stores three main components:
+
+1. ID
+
+- Uniquely identifies each chunk.
+- Example: `chunk_001`
+
+2. Text or Document
+
+- Stores the original text chunk, depending on the database configuration.
+- Example: `"Embeddings are numerical representations of text..."`
+
+3. Embedding Vector
+
+- A list of numerical values representing the text.
+- Example: `[0.12, -0.34, 0.78, 0.05, ...]`
+- The example uses a 384-dimensional vector.
+
+4. Metadata
+
+- Stores additional information about the chunk.
+- Examples:
+  - Source filename: `embeddings_notes.txt`
+  - Chunk index: `0`
+  - Page number or document category.
+
+Key point: A vector database can store the original text, its embedding, and metadata together, allowing the application to retrieve the actual text after finding a matching vector.
+
+## 2. What Happens When a User Asks a Question?
+
+Suppose the user asks:
+
+“What are embeddings and how do they represent text?”
+
+The retrieval process follows these steps:
+
+Step 1: User Question
+
+"What are embeddings?"
+
+Step 2: Embedding Model
+
+Converts the question into a numerical vector.
+
+Step 3: Vector Database
+
+Searches for stored vectors similar to the question vector.
+
+Step 4: Retrieve Top Matching Chunks
+
+Returns relevant text and associated metadata.
+
+### Important concept
+
+The user's question must also be converted into an embedding before vector search.
+
+The database typically compares the question vector with stored document vectors, rather than searching for the question as a literal word.
+
+## 3. Does a Vector Database Calculate Cosine Similarity Every Time?
+
+A vector search system compares the query vector with stored vectors using a selected similarity or distance measure. However, the search method depends on the database and its configuration.
+
+### Approach A: Brute-Force Similarity Search
+
+- Calculates similarity between the query vector and every stored vector.
+- Sorts the results by similarity.
+- Returns the top matching chunks.
+
+Example Python code:
+
+python
+```
+scores = cos_sim(question_embedding, chunk_embeddings)[0]
+```
+
+This approach is manageable for a small collection of vectors, but it can become expensive when the database contains millions of vectors.
+
+### Approach B: Approximate Nearest-Neighbor (ANN) Search
+
+- Uses an index to efficiently identify likely nearest vectors.
+- Avoids exhaustively comparing the query against every stored vector in many implementations.
+- Can significantly improve search speed for large datasets.
+- May not always return the exact nearest neighbors.
+
+For example, ChromaDB supports indexed vector search using approximate nearest-neighbor techniques.
+
+### Common similarity and distance measures
+
+| Measure | Purpose |
+| --- | --- |
+| Cosine similarity | Measures the angle-based similarity between vectors. |
+| Euclidean distance | Measures the straight-line distance between vectors. |
+| Inner product | Measures the dot product between vectors. |
+
+Key point: Not every vector database explicitly calculates cosine similarity for every query. The metric and retrieval algorithm depend on its configuration.
+
+## 4. What Happens After Retrieval? (RAG)
+
+RAG stands for Retrieval-Augmented Generation.
+
+It combines information retrieval with an LLM to generate answers using relevant information from a document collection.
+
+### RAG workflow
+
+1. Vector Database
+
+Finds and returns the most relevant chunks.
+
+2. Retrieved Context + User Question
+
+Combines the relevant passages and question into a prompt.
+
+3. Large Language Model (LLM)
+
+Uses the supplied context to generate an answer.
+
+4. Final Answer
+
+Returns an answer informed by the retrieved information.
+
+### Difference between a vector database and an LLM
+
+| Component | Responsibility |
+| --- | --- |
+| Embedding model | Converts text into numerical vectors. |
+| Vector database | Stores vectors and retrieves relevant chunks. |
+| LLM | Generates a natural-language answer using the prompt and available context. |
+| RAG pipeline | Connects retrieval and generation into one workflow. |
+
+Remember: The vector database finds the information; the LLM uses the information to generate the answer.
+
+## 5. Quick Revision
+
+- Embedding: A numerical representation of text.
+- Chunking: Splitting a document into smaller pieces.
+- Vector database: Stores and searches embeddings, often alongside text and metadata.
+- Query embedding: The vector representation of the user's question.
+- Similarity search: Finds vectors close to the query vector according to a chosen metric.
+- Brute-force search: Compares the query against every stored vector.
+- ANN search: Uses indexing to find likely nearest neighbors efficiently.
+- Metadata: Additional details such as filenames, page numbers, and chunk IDs.
+- RAG: Retrieves relevant information and supplies it to an LLM to generate an answer.
+
+### One-line summary
+
+Document → Chunks → Embeddings → Vector Database → Similarity Search → Retrieved Context → LLM → Final Answer

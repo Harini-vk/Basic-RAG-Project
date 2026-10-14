@@ -1,0 +1,1 @@
+Embeddings are numerical representations of text. An embedding model converts sentences or passages into vectors containing floating-point numbers. Semantically similar text tends to have vectors that are close together in vector space. Cosine similarity compares the directions of two vectors and can help rank documents by semantic relevance.
