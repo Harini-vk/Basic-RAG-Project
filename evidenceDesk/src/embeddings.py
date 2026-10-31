@@ -1,142 +1,72 @@
+
+from functools import lru_cache
+from typing import Sequence
+
 from sentence_transformers import SentenceTransformer
-from sentence_transformers.util import cos_sim
-from src.ingestion import process_document
 
-model = SentenceTransformer("all-MiniLM-L6-v2")
-
-sentence1 = "How can I reset my password?"
-sentence2 = "I forgot my login credentials. How do I regain access?"
-sentence3 = "What is the capital of France?"
-
-# Convert each sentence into a vector
-embeddings = model.encode([sentence1, sentence2, sentence3])
-
-# Compare their vectors
-similarity_1_2 = cos_sim(embeddings[0], embeddings[1])
-similarity_1_3 = cos_sim(embeddings[0], embeddings[2])
-
-print("Password question similarity:", similarity_1_2.item())
-print("Password vs geography similarity:", similarity_1_3.item())
+from src.config import EMBEDDING_MODEL_NAME
 
 
-documents = process_document("data/sample.txt")
+@lru_cache(maxsize=4)
+def get_embedding_model(
+    model_name: str = EMBEDDING_MODEL_NAME,
+) -> SentenceTransformer:
+    """Load an embedding model lazily and reuse it."""
+    if not isinstance(model_name, str) or not model_name.strip():
+        raise ValueError("Embedding model name cannot be empty.")
 
-print("\nChunks available for retrieval:")
-
-for document in documents:
-    print(
-        f"Chunk {document['chunk_index']}: "
-        f"{document['text'][:100]}..."
-    )
-
-embedding_cache = {}
+    return SentenceTransformer(model_name)
 
 
-def embed_chunks(documents: list[dict]) -> list[dict]:
-    """Attach an embedding to each document chunk."""
-    if not documents:
+def embed_texts(
+    texts: Sequence[str],
+    model_name: str = EMBEDDING_MODEL_NAME,
+) -> list[list[float]]:
+    """Generate normalized embeddings for a sequence of texts."""
+    if isinstance(texts, (str, bytes)):
+        raise TypeError("texts must be a sequence of strings.")
+
+    texts = list(texts)
+
+    if not texts:
         return []
 
-    texts = [document["text"] for document in documents]
-    vectors = model.encode(texts)
+    if any(not isinstance(text, str) for text in texts):
+        raise TypeError("Every item in texts must be a string.")
 
-    return [
-        {
-            **document,
-            "embedding": vector,
-        }
-        for document, vector in zip(documents, vectors)
-    ]
+    if any(not text.strip() for text in texts):
+        raise ValueError("Texts cannot contain empty strings.")
 
+    model = get_embedding_model(model_name)
 
-from pathlib import Path
-
-
-def get_embedded_documents(file_path: str) -> list[dict]:
-    """Return cached chunks and embeddings."""
-    cache_key = str(Path(file_path).resolve())
-
-    if cache_key not in embedding_cache:
-        documents = process_document(cache_key)
-        embedding_cache[cache_key] = embed_chunks(documents)
-        print(f"Computed embeddings for: {cache_key}")
-    else:
-        print(f"Using cached embeddings for: {cache_key}")
-
-    return embedding_cache[cache_key]
-
-
-def retrieve_chunks(question: str, file_path: str, top_k: int = 2):
-    # Get cached document chunks and embeddings
-    embedded_documents = get_embedded_documents(file_path)
-
-    if not embedded_documents:
-        return []
-
-    # Extract the cached vectors without recomputing them
-    chunk_embeddings = [
-        document["embedding"]
-        for document in embedded_documents
-    ]
-
-    # Create an embedding for the user's question
-    question_embedding = model.encode(question)
-
-    # Compare the question against every chunk
-    scores = cos_sim(question_embedding, chunk_embeddings)[0]
-
-    # Rank chunks from most to least similar
-    ranked_indices = scores.argsort(descending=True)[:top_k]
-
-    return [
-        {
-            **{
-                key: value
-                for key, value in embedded_documents[index].items()
-                if key != "embedding"
-            },
-            "similarity": scores[index].item(),
-        }
-        for index in ranked_indices
-    ]
-
-
-if __name__ == "__main__":
-    from src.document_loader import find_documents
-
-    question = "What are embeddings and how do they represent text?"
-    all_results = []
-
-    for file in find_documents("data"):
-        results = retrieve_chunks(
-            question,
-            str(file),
-            top_k=2,
-        )
-
-        all_results.extend(results)
-
-    all_results.sort(
-        key=lambda result: result["similarity"],
-        reverse=True,
+    embeddings = model.encode(
+        texts,
+        convert_to_numpy=True,
+        normalize_embeddings=True,
+        show_progress_bar=False,
     )
 
-    print("\nQuestion:", question)
+    return embeddings.tolist()
 
-    for result in all_results[:2]:
-        print("\nSimilarity:", round(result["similarity"], 4))
-        print("Source:", result["source"])
-        print("Chunk:", result["chunk_index"])
-        print("Text:", result["text"])
-        
-    print("\nTesting cache:")
 
-    retrieve_chunks(
-        "What is semantic search?",
-        "data/embeddings_notes.txt",
-    )
+def embed_query(
+    question: str,
+    model_name: str = EMBEDDING_MODEL_NAME,
+) -> list[float]:
+    """Generate an embedding for a retrieval query."""
+    if not isinstance(question, str):
+        raise TypeError("Question must be a string.")
 
-    retrieve_chunks(
-        "How do vectors represent text?",
-        "data/embeddings_notes.txt",
-    )
+    if not question.strip():
+        raise ValueError("Question cannot be empty.")
+
+    return embed_texts([question], model_name=model_name)[0]
+
+
+
+# No import-time experiments: importing the module won't load the model or process documents.
+# Lazy loading: the model loads only when an embedding is requested.
+# Model reuse: lru_cache prevents repeatedly loading the same model.
+# Input validation: empty text and invalid input produce clear errors.
+# Normalized embeddings: vectors are normalized consistently for similarity search.
+# Clean separation: this module handles embeddings only, not document loading, chunking, or Chroma retrieval.
