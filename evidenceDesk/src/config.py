@@ -57,7 +57,17 @@ if not 0 <= CHUNK_OVERLAP < CHUNK_SIZE:
         "and smaller than RAG_CHUNK_SIZE."
     )
 
+# Evidence sufficiency
+EVIDENCE_DISTANCE_THRESHOLD = float(
+    os.getenv("RAG_EVIDENCE_DISTANCE_THRESHOLD", "1.50")
+)
 
+if not 0 <= EVIDENCE_DISTANCE_THRESHOLD <= 2:
+    raise ValueError(
+        "RAG_EVIDENCE_DISTANCE_THRESHOLD must be between 0 and 2."
+    )
+
+    
 # Retrieval defaults
 DEFAULT_TOP_K = get_int_env("RAG_TOP_K", 3)
 
